@@ -1,22 +1,37 @@
 import os
+from utils import timer
 import subprocess
+from typing import List
 
-conda_prefix = str(os.environ.get("CONDA_PREFIX_1"))
-current_env = os.path.basename(str(os.environ.get("CONDA_PREFIX")))
-env_path = os.path.join(conda_prefix, "envs")
-subprocess.run(
-    ". /home/prince/anaconda3/envs/pyman/etc/profile.d/conda.sh ; ",
-    shell=True,
-    executable="/bin/bash",
-)
+# du -sh $("ls" ~/anaconda3/envs/)
+home_path = os.environ.get("HOME") or ""
+dir_path = os.path.join(home_path, "anaconda3/envs/")
 
-# activated_env = os.path.basename(path)
-conda_enviroment_list = [
-    i.name for i in os.scandir(env_path) if not i.name.startswith(".")
-]
-for i in conda_enviroment_list:
-    if i == current_env:
-        print("* ", end="")
-    else:
-        print("  ", end="")
-    print(i)
+
+def get_dir_size(list_of_dir: List[str]) -> List[str] | dict[str, str]:
+    cmd = f"du -bs {' '.join(list_of_dir)} | awk '{{print $1}}'"
+    try:
+        result = subprocess.run(
+            cmd, shell=True, text=True, capture_output=True, check=True
+        )
+        raw_size = result.stdout.splitlines()
+        return raw_size
+    except FileNotFoundError as e:
+        return {"error": str(e)}  # Return error message in dictionary
+
+
+@timer
+def main():
+    ls = [
+        os.path.join(dir_path, i.name)
+        for i in os.scandir(dir_path)
+        if not i.name.startswith(".")
+    ]
+
+    out = get_dir_size(ls)
+    for i in out:
+        print(type(i))
+
+
+if __name__ == "__main__":
+    main()
