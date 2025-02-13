@@ -20,15 +20,13 @@ logger.add(
 )
 
 
-class Utils:
-    @staticmethod
-    def byte_to_string(size: float) -> str:
-        units = ["B", "KB", "MB", "GB", "TB"]
-        i = 0
-        while size >= 1024 and i < len(units) - 1:
-            size /= 1024.0
-            i += 1
-        return f"{size:.{2}f} {units[i]}"
+def byte_to_string(size: float) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    while size >= 1024 and i < len(units) - 1:
+        size /= 1024.0
+        i += 1
+    return f"{size:.{2}f} {units[i]}"
 
 
 @dataclass
@@ -41,7 +39,7 @@ class Environment:
 
 
 @dataclass
-class Conda(Utils):
+class Conda:
     conda_path: str = field(init=False, default="~/anaconda3/envs/")
     env_names: List[str] = field(init=False)
     env_obj_list: List[Environment] = field(init=False, default_factory=list)
@@ -50,7 +48,7 @@ class Conda(Utils):
     def __post_init__(self) -> None:
         self._set_conda_path()
         logger.trace("Set conda_path")
-        self.env_names = self.get_env_name()
+        self.env_names = self.get_list_enviroments()
         logger.trace("Set env_names")
         self._reload_env()
         self.set_env_path()
@@ -71,7 +69,7 @@ class Conda(Utils):
             )
             self.conda_path = default_conda_path
 
-    def get_env_name(self) -> List[str]:
+    def get_list_enviroments(self) -> List[str]:
         return [
             i.name for i in os.scandir(self.conda_path) if not i.name.startswith(".")
         ]
@@ -79,6 +77,9 @@ class Conda(Utils):
     def set_env_path(self) -> None:
         for i in self.env_obj_list:
             i.path = os.path.join(self.conda_path, i.name)
+
+    def set_env_obj(self) -> None:
+        self.env_obj_list = [Environment(i) for i in self.env_names]
 
     def get_dir_size(self) -> Tuple[bool, Union[List[float], str]]:
         cmd = f"du -bs {' '.join([i.path for i in self.env_obj_list])} | awk '{{print $1}}'"
@@ -98,9 +99,6 @@ class Conda(Utils):
                 obj.size = self.byte_to_string(vol)
             self.size_all = self.byte_to_string(sum(sizes))
 
-    def set_env_obj(self) -> None:
-        self.env_obj_list = [Environment(i) for i in self.env_names]
-
     def _reload_env(self) -> None:
         self.set_env_obj()
         logger.trace("set env obj")
@@ -109,7 +107,7 @@ class Conda(Utils):
         # self.set_env_size()
 
     def reload(self, force_reload=False):
-        updated_list = self.get_env_name()
+        updated_list = self.get_list_enviroments()
         if self.env_names == updated_list and not force_reload:
             return False
         else:
