@@ -1,5 +1,5 @@
 from conda import Conda
-from .logger import logger
+from utils import logger
 
 conda = Conda()
 environments = conda.environments

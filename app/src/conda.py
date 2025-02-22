@@ -6,9 +6,8 @@ from typing import Callable, Generator, Optional, Tuple, Set, List, Dict
 from dataclasses import dataclass, field
 import os
 
-from utils import timer
-from vars import default_conda_path
-from logger import logger
+from utils import logger, default_conda_path, timer
+from watch import DirectoryWatcher, start_watcher
 
 
 @dataclass
@@ -115,11 +114,16 @@ class Environment:
 class Conda:
     path: str = field(init=False)
     environments: Dict[str, Environment] = field(init=False)
+    reload_pool: set = field(init=False)
+
+    def __post_init__(self):
+        self.path = self.fetch_path()
+        self.reload_pool = {}
+        self.watcher = start_watcher(self.path)
 
     def initialize(self):
-        self.path = self.fetch_path()
         self.environments = self.set_environments()
-        logger.debug("envs are set")
+        # logger.debug("envs are set")
         all_size = self.fetch_size(list(self.environments.keys()))
         self.set_environments_size(all_size)
         return self
@@ -169,43 +173,22 @@ class Conda:
         for key, val in dict_size.items():
             self.environments[key].size = (val, byte_to_string(val))
 
-
-@dataclass
-class ReloadHandler(Conda):
-    reload_pool: List[str] = field(
-        default_factory=list
-    )  # Stores Env(cls) tht need to be reloaded
-
-    def check(self, env: Environment, updated_file_num: int) -> bool | None:
-        if env.has_changed(updated_file_num) and env.name not in self.reload_pool:
-            self.reload_pool.append(env.name)
-            return True
-        else:
+    def check(self):
+        if not self.watcher.seen:
             return False
-
-    @property
-    def pool(self):
-        return self.reload_pool
-
-    def reload_sizes(self):
-        updated_sizes = self.fetch_size(self.reload_pool)
-        if not isinstance(updated_sizes, list):
-            logger.error("fetch_sizes failed")
-            return
-
-        for name, new_size in updated_sizes.items():
-            if isinstance(new_size, float):
-                self.environments[name].size = (new_size, byte_to_string(new_size))
-            else:
-                logger.error(f"Invalid size for {name}: {new_size}")
+        else:
+            self.reload_pool = self.watcher.seen
+            return True
 
 
 def main():
     conda = Conda().initialize()
-    envs = conda.environments
-    reloader = ReloadHandler()
-    should_reload = reloader.check(envs["my_env"], envs["my_env"].fetch_file_num())
-    logger.trace(f"should_reload : {should_reload}")
+    while True:
+        if conda.check():
+            logger.warning(f"reload_pool : {conda.reload_pool}")
+            conda.initialize()
+            for i in conda.environments:
+                logger.trace(i)
 
 
 if __name__ == "__main__":

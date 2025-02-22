@@ -3,6 +3,8 @@ import os
 from dataclasses import dataclass, field
 from inotify.adapters import InotifyTree
 from inotify.constants import IN_CREATE, IN_DELETE
+from utils import logger
+import threading
 
 
 @dataclass
@@ -21,7 +23,13 @@ class DirectoryWatcher:
             """Detects events and puts unique values in the queue."""
             for event in inotify.event_gen(yield_nones=False):
                 _, _, event_path, filename = event
-                env = event_path.rstrip("/").split("/")[index]
+                env_path = event_path.rstrip("/").split("/")
+                if len(env_path) == index:
+                    env = env_path[index - 1]
+                elif len(env_path) > index:
+                    env = env_path[index]
+                else:
+                    env = None
 
                 if env and env not in self.seen:  # Check if value is unique
                     self.seen.add(env)  # Mark as seen
@@ -36,7 +44,24 @@ class DirectoryWatcher:
         """Processes exported unique values."""
         while True:
             env = await self.queue.get()
-            print(f"Exported: {env}")  # Replace with any export logic
+            logger.trace(f"Tracked : {env}")
+            # Replace with any export logic
+
+
+def start_watcher(dir_path: str):
+    """Runs the async DirectoryWatcher in a separate thread."""
+    path = os.path.expanduser(dir_path)
+    watcher = DirectoryWatcher(path)
+
+    async def run():
+        """Runs the async watcher and event processor."""
+        await watcher.watch()
+        await watcher.process_events()
+
+    # Start the event loop in a new thread
+    thread = threading.Thread(target=lambda: asyncio.run(run()), daemon=True)
+    thread.start()
+    return watcher
 
 
 async def main():
