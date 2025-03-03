@@ -6,8 +6,9 @@ from typing import Callable, Generator, Optional, Tuple, Set, List, Dict
 from dataclasses import dataclass, field
 import os
 
-from utils import logger, default_conda_path, timer
-from watch import DirectoryWatcher, start_watcher
+from utils import logger, default_conda_path, timer, cls
+from watch import DirectoryWatcher
+import asyncio
 
 
 @dataclass
@@ -118,8 +119,6 @@ class Conda:
 
     def __post_init__(self):
         self.path = self.fetch_path()
-        self.reload_pool = {}
-        self.watcher = start_watcher(self.path)
 
     def initialize(self):
         self.environments = self.set_environments()
@@ -173,23 +172,22 @@ class Conda:
         for key, val in dict_size.items():
             self.environments[key].size = (val, byte_to_string(val))
 
-    def check(self):
-        if not self.watcher.seen:
-            return False
-        else:
-            self.reload_pool = self.watcher.seen
-            return True
 
+async def main():
+    conda = Conda()
+    conda.initialize()  # Ensure initialization is correct
 
-def main():
-    conda = Conda().initialize()
+    watcher = DirectoryWatcher(conda.path)
+    asyncio.create_task(watcher.watch())  # Run watcher asynchronously
+
     while True:
-        if conda.check():
-            logger.warning(f"reload_pool : {conda.reload_pool}")
-            conda.initialize()
-            for i in conda.environments:
-                logger.trace(i)
+        if await watcher.check_for_changes():  # Wait for a change
+            cls()
+            conda.initialize()  # Re-initialize Conda (reload environments)
+
+            for env in conda.environments:
+                logger.warning(env)  # Log environment changes
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

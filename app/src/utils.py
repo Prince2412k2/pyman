@@ -9,7 +9,7 @@ logger.remove()
 logger.add(
     sys.stdout,
     format="<level>{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}</level>",
-    level="TRACE",
+    level="WARNING",
     colorize=True,
     enqueue=True,
 )
@@ -25,6 +25,10 @@ def timer(func):
         return output
 
     return wrapper
+
+
+def cls():
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 home_path = os.environ.get("HOME", "~")
